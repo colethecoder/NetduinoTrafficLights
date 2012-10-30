@@ -56,6 +56,7 @@ namespace TrafficLights
             {                
                 using (Socket clientSocket = socket.Accept())
                 {
+                    Thread.Sleep(200);
                     IPEndPoint clientIP = clientSocket.RemoteEndPoint as IPEndPoint;
                     EndPoint clientEndPoint = clientSocket.RemoteEndPoint;
                     int bytesReceived = clientSocket.Available;
@@ -65,6 +66,13 @@ namespace TrafficLights
                         byte[] buffer = new byte[bytesReceived];
                         int byteCount = clientSocket.Receive(buffer, bytesReceived, SocketFlags.None);
                         string request = new string(Encoding.UTF8.GetChars(buffer));
+                        if(clientSocket.Available > 0)
+                        {
+                            bytesReceived = clientSocket.Available;
+                            buffer = new byte[clientSocket.Available];
+                            byteCount = clientSocket.Receive(buffer, bytesReceived, SocketFlags.None);
+                            request += new string(Encoding.UTF8.GetChars(buffer));
+                        }
                         string response;
                         string header;
                         try
@@ -146,29 +154,23 @@ namespace TrafficLights
                 var trafficLightRequest = new TrafficLightRequest();
                 foreach (var line in request.Split('\n'))
                 {
-                    if (line.ToCharArray()[0] == '{')
+                    string[] phrases = line.Split(' ');
+                    string url = phrases[1].ToLower();
+                    if(url.IndexOf("flashing=true") != -1)
                     {
-                        var jsonLine = line.Substring(1, line.Length - 2);
-                        var pairs = jsonLine.Split(',');
-                        foreach (var pair in pairs)
-                        {
-                            var values = pair.Trim().Split(':');
-                            switch (values[0])
-                            {
-                                case (@"""colour"""):
-                                    trafficLightRequest.SetColour(values[1].Trim().Substring(1, values[1].Trim().Length - 2));
-                                    break;
-                                case (@"""flashing"""):
-                                    trafficLightRequest.Flashing = values[1].Trim() == "true" ? true : false; 
-                                    break;
-                                case (@"""solo"""):
-                                    trafficLightRequest.Solo = values[1].Trim() == "true" ? true : false;
-                                    break;
-                                default:
-                                    throw new NotSupportedException();
-                            }
-                        }
+                        trafficLightRequest.Flashing = true;
                     }
+                    if (url.IndexOf("solo=true") != -1)
+                    {
+                        trafficLightRequest.Solo = true;
+                    }
+                    if(url.Substring(0,6) == "/green")
+                        trafficLightRequest.Colour = TrafficLightColour.Green;
+                    if (url.Substring(0, 4) == "/red")
+                        trafficLightRequest.Colour = TrafficLightColour.Red;
+                    if (url.Substring(0, 6) == "/amber")
+                        trafficLightRequest.Colour = TrafficLightColour.Amber;
+                    return trafficLightRequest;
                 }
                 if(trafficLightRequest.Colour == TrafficLightColour.NotSpecified)
                 {
@@ -194,24 +196,6 @@ namespace TrafficLights
             Flashing = false;
             Solo = false;
             Colour = TrafficLightColour.NotSpecified;
-        }
-
-        public void SetColour(string colour)
-        {
-            switch(colour)
-            {
-                case("red"):
-                    Colour = TrafficLightColour.Red;
-                    break;
-                case("amber"):
-                    Colour = TrafficLightColour.Amber;
-                    break;
-                case("green"):
-                    Colour = TrafficLightColour.Green;
-                    break;
-                default:
-                    throw new NotSupportedException();
-            }
         }
     }
 
